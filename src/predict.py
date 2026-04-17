@@ -1,40 +1,35 @@
 import joblib
 import os
-import sys
+from functools import lru_cache
 
-# ✅ Get absolute base directory (project root)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-# ✅ Add src to path (for preprocess import)
-sys.path.append(os.path.join(BASE_DIR, "src"))
-
-from preprocess import clean_text
-
-# ✅ Safe model paths (works locally + Streamlit cloud)
 MODEL_PATH = os.path.join(BASE_DIR, "models", "model.pkl")
-VECTORIZER_PATH = os.path.join(BASE_DIR, "models", "vectorizer.pkl")
 
-# ✅ Load model safely
-try:
-    model = joblib.load(MODEL_PATH)
-    vectorizer = joblib.load(VECTORIZER_PATH)
-except Exception as e:
-    raise RuntimeError(f"❌ Error loading model files: {e}")
+@lru_cache(maxsize=1)
+def load_model():
+    return joblib.load(MODEL_PATH)
 
-# ✅ Prediction function
+model = load_model()
+
 def predict_stress(text):
+    text = str(text).strip()
+
+    if not text:
+        return "Invalid Input", 0.0
+
     try:
-        cleaned = clean_text(text)
-        vectorized = vectorizer.transform([cleaned])
-        prediction = model.predict(vectorized)[0]
+        prediction = model.predict([text])[0]
+        probabilities = model.predict_proba([text])[0]
+        confidence = float(max(probabilities) * 100)
 
-        # Convert label → readable output
         if prediction == 0:
-            return "Low Stress"
+            label = "Low Stress"
         elif prediction == 1:
-            return "High Stress"
+            label = "High Stress"
         else:
-            return f"Unknown ({prediction})"
+            label = f"Unknown ({prediction})"
 
-    except Exception as e:
-        return f"Prediction Error: {e}"
+        return label, round(confidence, 2)
+
+    except Exception:
+        return "Prediction Error", 0.0

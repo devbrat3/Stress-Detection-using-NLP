@@ -1,38 +1,41 @@
 import pandas as pd
+import joblib
+import os
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
-import joblib
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import accuracy_score
 
 from preprocess import clean_text
 
-# Load dataset
-df = pd.read_csv("../data/Stress.csv")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Keep only required columns
-df = df[['text', 'label']]
+data_path = os.path.join(BASE_DIR, "data", "Stress.csv")
+model_path = os.path.join(BASE_DIR, "models", "model.pkl")
 
-print("Dataset loaded successfully")
-print(df.head())
+df = pd.read_csv(data_path)
+df = df[['text', 'label']].dropna()
 
-# Preprocess text
-df['processed'] = df['text'].apply(clean_text)
-
-# Feature extraction
-tfidf = TfidfVectorizer(max_features=5000)
-X = tfidf.fit_transform(df['processed'])
-
+X = df['text'].apply(clean_text)
 y = df['label']
 
-# Split dataset
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
 
-# Train model
-model = LogisticRegression()
-model.fit(X_train, y_train)
+pipeline = Pipeline([
+    ("tfidf", TfidfVectorizer(max_features=7000, ngram_range=(1, 2))),
+    ("model", LogisticRegression(max_iter=500, n_jobs=-1))
+])
 
-# Save model
-joblib.dump(model, "../models/model.pkl")
-joblib.dump(tfidf, "../models/vectorizer.pkl")
+pipeline.fit(X_train, y_train)
 
-print("✅ Model trained successfully")
+y_pred = pipeline.predict(X_test)
+acc = accuracy_score(y_test, y_pred)
+
+os.makedirs(os.path.join(BASE_DIR, "models"), exist_ok=True)
+joblib.dump(pipeline, model_path)
+
+print(f"Accuracy: {round(acc*100, 2)}%")

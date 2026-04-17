@@ -1,6 +1,47 @@
+# -------------------------------
+# Python
+# -------------------------------
 venv/
 __pycache__/
 *.pyc
-models/
+*.pyo
+*.pyd
+
+# -------------------------------
+# Environment variables
+# -------------------------------
 .env
+
+# -------------------------------
+# OS files
+# -------------------------------
 .DS_Store
+Thumbs.db
+
+# -------------------------------
+# IDE files
+# -------------------------------
+.vscode/
+.idea/
+
+# -------------------------------
+# Logs & temp
+# -------------------------------
+*.log
+*.tmp
+
+# -------------------------------
+# Jupyter / notebooks
+# -------------------------------
+.ipynb_checkpoints/
+
+# -------------------------------
+# Large ML artifacts (OPTIONAL)
+# -------------------------------
+# ⚠️ DO NOT ignore models for deployment
+# models/
+
+# If models become too large (>100MB), then use:
+# models/*.h5
+# models/*.pt
+# models/*.bin
