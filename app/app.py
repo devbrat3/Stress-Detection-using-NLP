@@ -1,29 +1,21 @@
 import streamlit as st
-import sys
-import os
 import pandas as pd
 import time
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.extend([
-    os.path.join(BASE_DIR, "src"),
-    os.path.join(BASE_DIR, "components")
-])
-
-from hybrid_predict import hybrid_predict
-from input_panel import render_input
-from result_panel import render_result
-from kpi_cards import render_kpis
-from charts import render_charts
-
-# 🔥 NEW IMPORT (IMPORTANT)
-from intelligence_engine import (
+# ✅ CORRECT IMPORTS (PACKAGE-BASED)
+from src.hybrid_predict import hybrid_predict
+from src.intelligence_engine import (
     generate_alerts,
     generate_insights,
     generate_intelligence,
     generate_recommendation,
     generate_summary
 )
+
+from components.input_panel import render_input
+from components.result_panel import render_result
+from components.kpi_cards import render_kpis
+from components.charts import render_charts
 
 
 # ---------- CONFIG ----------
@@ -73,6 +65,7 @@ with st.sidebar:
 
         st.metric("Sessions", len(df))
         st.metric("Avg Stress", f"{round(df['Confidence'].mean(),2)}%")
+        st.metric("Latest", f"{df['Confidence'].iloc[-1]}%")
 
     st.caption(f"Latency: {st.session_state.latency} ms")
 
@@ -81,6 +74,17 @@ with st.sidebar:
 if page == "Dashboard":
 
     st.markdown("## 🏥 Clinical Decision Dashboard")
+
+    # ---------- TOP KPI ----------
+    if st.session_state.history:
+        df = pd.DataFrame(st.session_state.history, columns=["Label", "Confidence"])
+
+        k1, k2, k3 = st.columns(3)
+        k1.metric("Sessions", len(df))
+        k2.metric("Average Stress", f"{round(df['Confidence'].mean(),2)}%")
+        k3.metric("Peak Stress", f"{round(df['Confidence'].max(),2)}%")
+
+    st.markdown("---")
 
     # ---------- INPUT + RESULT ----------
     left, right = st.columns([2, 1])
@@ -93,7 +97,6 @@ if page == "Dashboard":
         if analyze and text.strip():
 
             start = time.time()
-
             result = hybrid_predict(text, model_mode)
 
             st.session_state.latency = int((time.time() - start) * 1000)
@@ -113,7 +116,7 @@ if page == "Dashboard":
 
     st.markdown("---")
 
-    # ================= 🧠 INTELLIGENCE LAYER =================
+    # ================= INTELLIGENCE =================
     if st.session_state.result:
 
         result = st.session_state.result
@@ -125,53 +128,38 @@ if page == "Dashboard":
         recommendation = generate_recommendation(result)
         summary = generate_summary(result, history)
 
-        st.markdown("## 🧠 Intelligence Layer")
+        st.markdown("## 🧠 Clinical Intelligence")
 
-        col1, col2 = st.columns(2)
+        c1, c2 = st.columns(2)
 
-        # ---------- ALERTS ----------
-        with col1:
+        with c1:
             st.markdown("### 🚨 Alerts")
+            for a in alerts or ["No critical alerts"]:
+                st.error(a) if alerts else st.success(a)
 
-            if alerts:
-                for a in alerts:
-                    st.error(a)
-            else:
-                st.success("No critical alerts")
-
-        # ---------- INSIGHTS ----------
-        with col2:
+        with c2:
             st.markdown("### 🔍 Insights")
-
-            if insights:
-                for i in insights:
-                    st.info(i)
-            else:
-                st.info("No major insights")
+            for i in insights or ["Stable behavior"]:
+                st.info(i)
 
         st.markdown("---")
 
-        # ---------- INTELLIGENCE METRICS ----------
-        i1, i2 = st.columns(2)
-
-        i1.metric("Risk Score", intelligence["risk_score"])
-        i2.metric("Volatility", intelligence["volatility"])
+        m1, m2 = st.columns(2)
+        m1.metric("Risk Score", intelligence["risk_score"])
+        m2.metric("Volatility", intelligence["volatility"])
 
         st.markdown("---")
 
-        # ---------- RECOMMENDATION ----------
         st.markdown("### 💡 Recommendation")
         st.success(recommendation)
 
-        # ---------- SUMMARY ----------
-        st.markdown("### 📄 Clinical Summary")
+        st.markdown("### 📄 Summary")
         st.code(summary)
 
     st.markdown("---")
 
     # ---------- TREND ----------
     if len(st.session_state.history) > 2:
-
         st.markdown("### 📈 Trend Analysis")
 
         df = pd.DataFrame(st.session_state.history, columns=["Label", "Confidence"])
@@ -180,9 +168,7 @@ if page == "Dashboard":
 
 # ================= ANALYTICS =================
 elif page == "Analytics":
-
     st.markdown("## 📊 Advanced Analytics")
-
     render_charts(st.session_state.history)
 
 
@@ -192,7 +178,6 @@ elif page == "Monitor":
     st.markdown("## 👤 Patient Monitoring")
 
     if st.session_state.history:
-
         df = pd.DataFrame(st.session_state.history, columns=["Label", "Confidence"])
 
         c1, c2 = st.columns([2, 1])
@@ -212,7 +197,6 @@ elif page == "Monitor":
                 st.warning("Moderate stress")
             else:
                 st.success("Stable")
-
     else:
         st.info("No monitoring data available")
 
@@ -223,14 +207,12 @@ elif page == "Reports":
     st.markdown("## 📄 Clinical Reports")
 
     if st.session_state.history:
-
         df = pd.DataFrame(st.session_state.history, columns=["Label", "Confidence"])
 
         st.download_button("⬇ CSV", df.to_csv(index=False), "report.csv")
         st.download_button("⬇ JSON", df.to_json(), "report.json")
 
         st.dataframe(df)
-
     else:
         st.info("No data available")
 
@@ -241,20 +223,10 @@ elif page == "System":
     st.markdown("## ⚙️ System Intelligence")
 
     st.markdown("""
-### 🧠 Architecture
-- Hybrid AI (ML + BERT)
-- Intelligence Engine
-- Decision Support Layer
-
-### ⚡ Capabilities
-- Real-time prediction
-- Behavioral analysis
-- Risk scoring
-- Alert system
-
-### 🚀 Deployment
-- Streamlit modular system
-- Scalable architecture
+- Hybrid AI (ML + BERT)  
+- Intelligence Engine  
+- Decision Support Layer  
+- Real-time Monitoring  
 """)
 
     st.success("System Fully Operational")
