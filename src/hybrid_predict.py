@@ -1,5 +1,5 @@
-from predict import predict_stress as ml_predict
-from predict_bert import predict_stress as bert_predict
+from src.predict import predict_stress as ml_predict
+from src.predict_bert import predict_stress as bert_predict
 
 
 def _risk(conf):
