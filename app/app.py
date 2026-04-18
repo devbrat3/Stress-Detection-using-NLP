@@ -10,89 +10,95 @@ sys.path.append(os.path.join(BASE_DIR, "src"))
 
 from hybrid_predict import hybrid_predict
 
-st.set_page_config(page_title="Stress Detection AI", layout="wide")
+st.set_page_config(page_title="AI Mental Health Platform", layout="wide")
 
+# ---------- STYLE ----------
+st.markdown("""
+<style>
+.block-container {padding-top: 1rem;}
+.card {
+    background-color:#1e1e2f;
+    padding:16px;
+    border-radius:12px;
+    text-align:center;
+    box-shadow:0 4px 12px rgba(0,0,0,0.3);
+}
+.big {font-size:22px;font-weight:600;color:#00c6ff;}
+.small {color:#9aa0a6;}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------- STATE ----------
 if "history" not in st.session_state:
     st.session_state.history = []
+if "last" not in st.session_state:
+    st.session_state.last = None
 
-if "last_result" not in st.session_state:
-    st.session_state.last_result = None
-
-
-def gauge(value):
+# ---------- HELPERS ----------
+def gauge(v):
     fig, ax = plt.subplots()
-    ax.pie(
-        [value, 100 - value],
-        startangle=90,
-        counterclock=False,
-        wedgeprops=dict(width=0.3)
-    )
-    ax.text(0, 0, f"{value}%", ha="center", va="center", fontsize=18)
+    ax.pie([v, 100-v], startangle=90, counterclock=False,
+           wedgeprops=dict(width=0.35))
+    ax.text(0,0,f"{v}%", ha='center', va='center', fontsize=20)
     return fig
 
+def trend(h):
+    if len(h) < 3: return "Insufficient"
+    vals = [c for _,c in h[-5:]]
+    return "Increasing" if vals[-1]>vals[0] else "Decreasing" if vals[-1]<vals[0] else "Stable"
 
-def trend(history):
-    if len(history) < 3:
-        return "Insufficient"
-    vals = [c for _, c in history[-5:]]
-    return "Increasing" if vals[-1] > vals[0] else "Decreasing" if vals[-1] < vals[0] else "Stable"
-
-
-def pattern(history):
-    if len(history) < 5:
-        return "Insufficient"
-    vals = [c for _, c in history]
-    if all(v > 70 for v in vals[-3:]):
-        return "Chronic"
-    if all(v < 40 for v in vals[-3:]):
-        return "Stable"
+def pattern(h):
+    if len(h)<5: return "Insufficient"
+    vals = [c for _,c in h]
+    if all(v>70 for v in vals[-3:]): return "Chronic"
+    if all(v<40 for v in vals[-3:]): return "Stable"
     return "Fluctuating"
 
+def uncertainty(c): return round(100-c,2)
 
-def uncertainty(conf):
-    return round(100 - conf, 2)
+# ---------- HEADER ----------
+st.markdown("""
+<div style="padding:18px;border-radius:12px;
+background:linear-gradient(90deg,#00c6ff,#0072ff);color:white">
+<h3>🧠 AI Mental Health Platform</h3>
+<p>Clinical Intelligence Dashboard</p>
+</div>
+""", unsafe_allow_html=True)
 
+st.markdown("<br>", unsafe_allow_html=True)
 
+# ---------- SIDEBAR ----------
 with st.sidebar:
-    st.title("🧠 Mental Health AI")
-
-    page = st.radio("Navigation", ["Dashboard", "Analytics", "Monitor", "Reports", "System"])
-    model_mode = st.selectbox("Model Mode", ["AUTO", "ML", "BERT"])
-
-    st.markdown("---")
+    st.title("Navigation")
+    page = st.radio("", ["Dashboard","Analytics","Monitor","Reports","System"])
+    mode = st.selectbox("Model Mode", ["AUTO","ML","BERT"])
 
     if st.session_state.history:
-        df = pd.DataFrame(st.session_state.history, columns=["Label", "Confidence"])
+        df = pd.DataFrame(st.session_state.history, columns=["Label","Confidence"])
         st.metric("Avg Stress", f"{round(df['Confidence'].mean(),2)}%")
         st.metric("Sessions", len(df))
 
-    st.caption("Clinical AI v5")
-
+    st.caption("Clinical AI v6")
 
 # ================= DASHBOARD =================
 if page == "Dashboard":
 
-    st.markdown("## 🏥 Clinical Intelligence Dashboard")
+    left, right = st.columns([2.5,1])
 
-    c1, c2 = st.columns([2.5, 1])
-
-    with c1:
-        text = st.text_area("Patient Input", height=150)
+    with left:
+        text = st.text_area("Patient Input", height=140)
         run = st.button("Analyze", use_container_width=True)
 
-    with c2:
+    with right:
         st.markdown("### Result")
 
         if run and text.strip():
-            with st.spinner("Processing..."):
-                res = hybrid_predict(text, model_mode)
-
-            st.session_state.last_result = res
+            res = hybrid_predict(text, mode)
+            st.session_state.last = res
             st.session_state.history.append((res["label"], res["confidence"]))
 
-        if st.session_state.last_result:
-            r = st.session_state.last_result
-
+        if st.session_state.last:
+            r = st.session_state.last
             (st.success if "Low" in r["label"] else st.error if "High" in r["label"] else st.warning)(r["label"])
             st.progress(int(r["confidence"]))
             st.metric("Confidence", f"{r['confidence']}%")
@@ -101,84 +107,94 @@ if page == "Dashboard":
 
     st.markdown("---")
 
-    if st.session_state.last_result:
-        r = st.session_state.last_result
+    if st.session_state.last:
+        r = st.session_state.last
 
-        # -------- CORE METRICS --------
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Severity", r["severity"])
-        m2.metric("Reliability", r["reliability"])
-        m3.metric("Agreement", r["agreement"])
-        m4.metric("Uncertainty", f"{uncertainty(r['confidence'])}%")
+        # ---------- KPI CARDS ----------
+        c1,c2,c3,c4 = st.columns(4)
+        c1.markdown(f"<div class='card'><div class='big'>{r['severity']}</div><div class='small'>Severity</div></div>", unsafe_allow_html=True)
+        c2.markdown(f"<div class='card'><div class='big'>{r['reliability']}</div><div class='small'>Reliability</div></div>", unsafe_allow_html=True)
+        c3.markdown(f"<div class='card'><div class='big'>{r['agreement']}</div><div class='small'>Agreement</div></div>", unsafe_allow_html=True)
+        c4.markdown(f"<div class='card'><div class='big'>{uncertainty(r['confidence'])}%</div><div class='small'>Uncertainty</div></div>", unsafe_allow_html=True)
 
-        if r["agreement"] == "No":
-            st.warning("Model disagreement")
-        if r["reliability"] == "Low":
-            st.error("Low reliability")
+        # ---------- ALERT BAR ----------
+        if r["agreement"]=="No":
+            st.warning("⚠️ Model disagreement detected")
+        if r["reliability"]=="Low":
+            st.error("Low prediction reliability")
 
-        # -------- VISUAL GRID --------
-        v1, v2 = st.columns(2)
+        st.markdown("---")
+
+        # ---------- VISUAL GRID ----------
+        v1,v2,v3 = st.columns([1,1,1])
 
         with v1:
-            st.markdown("### Stress Gauge")
+            st.markdown("#### Stress Gauge")
             st.pyplot(gauge(r["confidence"]))
 
         with v2:
             fig, ax = plt.subplots()
-            ax.bar(["Confidence", "Uncertainty"], [r["confidence"], uncertainty(r["confidence"])])
+            ax.bar(["Confidence","Uncertainty"],
+                   [r["confidence"],uncertainty(r["confidence"])])
             st.pyplot(fig)
 
-        # -------- TEXT ANALYSIS --------
-        st.markdown("### Indicators")
-        for w, f in Counter([w for w in text.lower().split() if len(w) > 3]).most_common(5):
-            st.write(f"{w} ({f})")
+        with v3:
+            st.markdown("#### Trend")
+            if len(st.session_state.history)>2:
+                df = pd.DataFrame(st.session_state.history, columns=["Label","Confidence"])
+                st.line_chart(df["Confidence"])
+            else:
+                st.info("Not enough data")
 
-        # -------- INTELLIGENCE --------
+        # ---------- INTELLIGENCE PANEL ----------
+        st.markdown("### Intelligence")
+
         t = trend(st.session_state.history)
         p = pattern(st.session_state.history)
 
-        st.markdown("### Intelligence")
-        st.write(f"Trend: {t}")
-        st.write(f"Pattern: {p}")
+        i1,i2,i3 = st.columns(3)
+        i1.metric("Trend", t)
+        i2.metric("Pattern", p)
 
-        if len(st.session_state.history) > 1:
+        if len(st.session_state.history)>1:
             prev = st.session_state.history[-2][1]
-            st.metric("Δ Change", f"{r['confidence'] - prev:+.2f}%")
+            i3.metric("Δ Change", f"{r['confidence']-prev:+.2f}%")
 
-        # -------- EXPLAINABILITY --------
+        # ---------- TEXT INSIGHTS ----------
+        st.markdown("### NLP Insights")
+        for w,f in Counter([w for w in text.lower().split() if len(w)>3]).most_common(5):
+            st.write(f"{w} ({f})")
+
+        # ---------- EXPLAINABILITY ----------
         st.markdown("### AI Explanation")
-        st.info(r.get("explanation", "N/A"))
+        st.info(r.get("explanation","N/A"))
 
-        # -------- ALERT ENGINE --------
-        st.markdown("### Alert")
-
-        if r["risk"] == "Critical":
+        # ---------- ALERT ENGINE ----------
+        st.markdown("### Clinical Alert")
+        if r["risk"]=="Critical":
             st.error("Immediate intervention required")
-        elif r["risk"] == "High":
+        elif r["risk"]=="High":
             st.warning("High stress detected")
         else:
-            st.success("Stable")
+            st.success("Stable condition")
 
-        # -------- RECOMMENDATION --------
+        # ---------- RECOMMENDATION ----------
         st.markdown("### Recommendation")
-        st.info(r["advice"])
+        st.success(r["advice"])
 
-        # -------- SUMMARY --------
+        # ---------- SUMMARY ----------
         st.markdown("### Summary")
-        st.text(
-            f"Stress: {r['label']} | Confidence: {r['confidence']}% | Trend: {t} | Pattern: {p}"
-        )
-
+        st.code(f"{r['label']} | {r['confidence']}% | Trend:{t} | Pattern:{p}")
 
 # ================= ANALYTICS =================
 elif page == "Analytics":
 
-    st.title("📊 Analytics")
+    st.title("Analytics")
 
     if st.session_state.history:
-        df = pd.DataFrame(st.session_state.history, columns=["Label", "Confidence"])
+        df = pd.DataFrame(st.session_state.history, columns=["Label","Confidence"])
 
-        a1, a2 = st.columns(2)
+        a1,a2 = st.columns(2)
         a1.line_chart(df["Confidence"])
 
         fig, ax = plt.subplots()
@@ -186,57 +202,51 @@ elif page == "Analytics":
         a2.pyplot(fig)
 
         st.dataframe(df.describe())
-
     else:
         st.info("No data")
-
 
 # ================= MONITOR =================
 elif page == "Monitor":
 
-    st.title("👤 Monitoring")
+    st.title("Patient Monitoring")
 
     if st.session_state.history:
-        df = pd.DataFrame(st.session_state.history, columns=["Label", "Confidence"])
-
-        st.dataframe(df)
+        df = pd.DataFrame(st.session_state.history, columns=["Label","Confidence"])
+        st.dataframe(df, use_container_width=True)
         st.line_chart(df["Confidence"])
 
         avg = df["Confidence"].mean()
         st.metric("Average Stress", f"{round(avg,2)}%")
 
-        (st.error if avg > 75 else st.warning if avg > 50 else st.success)(
-            "Chronic" if avg > 75 else "Moderate" if avg > 50 else "Stable"
+        (st.error if avg>75 else st.warning if avg>50 else st.success)(
+            "Chronic" if avg>75 else "Moderate" if avg>50 else "Stable"
         )
-
     else:
         st.info("No data")
-
 
 # ================= REPORTS =================
 elif page == "Reports":
 
-    st.title("📄 Reports")
+    st.title("Reports")
 
     if st.session_state.history:
-        df = pd.DataFrame(st.session_state.history, columns=["Label", "Confidence"])
-        st.download_button("Download", df.to_csv(index=False), "report.csv")
+        df = pd.DataFrame(st.session_state.history, columns=["Label","Confidence"])
+        st.download_button("Download CSV", df.to_csv(index=False), "report.csv")
         st.dataframe(df)
     else:
         st.info("No data")
 
-
 # ================= SYSTEM =================
 elif page == "System":
 
-    st.title("⚙️ System")
+    st.title("System Overview")
 
     st.markdown("""
-- Hybrid AI Engine (ML + BERT)
-- Explainable AI
-- Trend + Pattern Intelligence
-- Clinical Decision Support
-- Real-time Monitoring
+- Hybrid AI Engine (ML + BERT)  
+- Explainable AI  
+- Trend Intelligence  
+- Clinical Decision Support  
+- Real-time Monitoring  
 """)
 
     st.success("System Operational")
