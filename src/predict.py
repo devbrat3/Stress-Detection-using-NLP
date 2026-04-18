@@ -12,39 +12,72 @@ def load_model():
 
 model = load_model()
 
-def _calibrate_confidence(probs):
-    probs = np.array(probs)
-    top2 = np.sort(probs)[-2:]
-    margin = top2[-1] - top2[-2] if len(top2) > 1 else top2[-1]
-    confidence = (top2[-1] * 0.7 + margin * 0.3) * 100
-    return float(np.clip(confidence, 0, 100))
+def _risk(conf):
+    if conf > 80:
+        return "Critical"
+    elif conf > 60:
+        return "High"
+    elif conf > 40:
+        return "Moderate"
+    else:
+        return "Low"
+
+def _severity(label, conf):
+    if "High" in label and conf > 75:
+        return "Severe"
+    elif conf > 60:
+        return "Elevated"
+    else:
+        return "Normal"
+
+def _recommendation(risk):
+    if risk == "Critical":
+        return "Immediate professional consultation recommended"
+    elif risk == "High":
+        return "Take rest and monitor stress closely"
+    elif risk == "Moderate":
+        return "Practice relaxation techniques"
+    else:
+        return "Maintain healthy routine"
 
 def predict_stress(text):
     text = str(text).strip()
 
-    if not text or len(text.split()) < 2:
-        return "Insufficient Input", 0.0
+    if not text:
+        return "Invalid", 0.0, "Low", "Normal", [], "No input"
 
     try:
-        prediction = model.predict([text])[0]
+        pred = model.predict([text])[0]
 
         if hasattr(model, "predict_proba"):
-            probabilities = model.predict_proba([text])[0]
-            confidence = _calibrate_confidence(probabilities)
+            probs = model.predict_proba([text])[0]
+            conf = float(np.max(probs) * 100)
         else:
-            confidence = 70.0
+            conf = 70.0
 
-        if prediction == 0:
+        if pred == 0:
             label = "Low Stress"
-        elif prediction == 1:
+        elif pred == 1:
             label = "High Stress"
         else:
-            label = f"Unknown ({prediction})"
+            label = "Medium Stress"
 
-        if confidence < 55:
-            label = "Uncertain"
+        risk = _risk(conf)
+        severity = _severity(label, conf)
+        advice = _recommendation(risk)
 
-        return label, round(confidence, 2)
+        # explainability
+        try:
+            tfidf = model.named_steps["tfidf"]
+            feature_names = np.array(tfidf.get_feature_names_out())
+            vec = tfidf.transform([text]).toarray()[0]
 
-    except Exception:
-        return "Prediction Error", 0.0
+            idx = vec.argsort()[-5:][::-1]
+            keywords = feature_names[idx]
+        except:
+            keywords = []
+
+        return label, round(conf, 2), risk, severity, list(keywords), advice
+
+    except:
+        return "Error", 0.0, "Low", "Normal", [], "Error"

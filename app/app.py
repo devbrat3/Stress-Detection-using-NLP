@@ -2,62 +2,233 @@ import streamlit as st
 import sys
 import os
 import pandas as pd
+from collections import Counter
+import matplotlib.pyplot as plt
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(BASE_DIR, "src"))
 
-from predict import predict_stress
+from hybrid_predict import hybrid_predict
 
-st.set_page_config(page_title="Stress Detection", layout="wide")
+st.set_page_config(page_title="Stress Detection AI", layout="wide")
 
 if "history" not in st.session_state:
     st.session_state.history = []
 
-st.title("🏥 Stress Detection Dashboard")
+if "last_result" not in st.session_state:
+    st.session_state.last_result = None
 
-col1, col2 = st.columns([2, 1])
+# -------- SIDEBAR --------
+with st.sidebar:
+    st.title("🧠 Mental Health AI")
 
-with col1:
-    text = st.text_area("Enter text", height=200)
-    btn = st.button("Analyze")
+    page = st.radio(
+        "Navigation",
+        ["Dashboard", "Analytics", "Patient Monitor", "Reports", "System"]
+    )
 
-with col2:
-    st.markdown("### Result")
+    model_mode = st.selectbox(
+        "Model Mode",
+        ["AUTO", "ML", "BERT"]
+    )
 
-    if btn:
-        label, confidence, risk = predict_stress(text)
+    st.markdown("---")
+    st.caption("Clinical AI Monitoring System v2")
 
-        st.session_state.history.append((label, confidence))
+# ================= DASHBOARD =================
+if page == "Dashboard":
 
-        if "Low" in label:
-            st.success(label)
-        elif "High" in label:
-            st.error(label)
+    st.title("🏥 Clinical Stress Detection Dashboard")
+
+    left, right = st.columns([2.7, 1])
+
+    # -------- INPUT --------
+    with left:
+        text = st.text_area(
+            "Patient Input",
+            height=180,
+            placeholder="Enter patient thoughts..."
+        )
+
+        analyze = st.button("Analyze", use_container_width=True)
+
+    # -------- RESULT PANEL --------
+    with right:
+        st.markdown("### 🧾 Clinical Output")
+
+        if analyze and text.strip():
+
+            result = hybrid_predict(text, model_mode)
+
+            st.session_state.last_result = result
+            st.session_state.history.append(
+                (result["label"], result["confidence"])
+            )
+
+        if st.session_state.last_result:
+
+            r = st.session_state.last_result
+
+            if "Low" in r["label"]:
+                st.success(r["label"])
+            elif "High" in r["label"]:
+                st.error(r["label"])
+            else:
+                st.warning(r["label"])
+
+            st.progress(int(r["confidence"]))
+            st.metric("Confidence", f"{r['confidence']}%")
+            st.metric("Risk", r["risk"])
+
+            st.caption(f"Model: {r['model']}")
+
+    st.markdown("---")
+
+    # -------- ADVANCED PANEL --------
+    if st.session_state.last_result:
+
+        r = st.session_state.last_result
+
+        col1, col2, col3 = st.columns(3)
+
+        col1.metric("Severity", r["severity"])
+        col2.metric("Reliability", r["reliability"])
+        col3.metric("Agreement", r["agreement"])
+
+        # -------- ALERTS --------
+        if r["agreement"] == "No":
+            st.warning("⚠️ Model disagreement detected")
+
+        if r["reliability"] == "Low":
+            st.error("Low prediction reliability")
+
+        # -------- KEYWORDS --------
+        st.markdown("### 🧠 Key Indicators")
+
+        words = [w for w in text.lower().split() if len(w) > 3]
+        for w, f in Counter(words).most_common(5):
+            st.write(f"🔹 {w} ({f})")
+
+        # -------- VISUALS --------
+        v1, v2 = st.columns(2)
+
+        with v1:
+            fig, ax = plt.subplots()
+            ax.barh(["Stress"], [r["confidence"]])
+            ax.set_xlim(0, 100)
+            st.pyplot(fig)
+
+        with v2:
+            fig2, ax2 = plt.subplots()
+            ax2.pie(
+                [r["confidence"], 100 - r["confidence"]],
+                labels=["Stress", "Neutral"],
+                autopct="%1.1f%%"
+            )
+            st.pyplot(fig2)
+
+        # -------- RECOMMENDATION --------
+        st.markdown("### 💡 Clinical Recommendation")
+        st.info(r["advice"])
+
+        # -------- TREND --------
+        if len(st.session_state.history) > 3:
+
+            recent = [c for _, c in st.session_state.history[-5:]]
+
+            st.markdown("### 📈 Behavioral Insight")
+
+            if recent[-1] > recent[0]:
+                st.warning("Increasing stress trend")
+            else:
+                st.success("Stable or improving trend")
+
+# ================= ANALYTICS =================
+elif page == "Analytics":
+
+    st.title("📊 Clinical Analytics")
+
+    if st.session_state.history:
+
+        df = pd.DataFrame(
+            st.session_state.history,
+            columns=["Label", "Confidence"]
+        )
+
+        c1, c2 = st.columns(2)
+
+        c1.line_chart(df["Confidence"])
+
+        fig, ax = plt.subplots()
+        df["Label"].value_counts().plot(kind="bar", ax=ax)
+        c2.pyplot(fig)
+
+        st.dataframe(df.describe())
+
+    else:
+        st.info("No data")
+
+# ================= PATIENT MONITOR =================
+elif page == "Patient Monitor":
+
+    st.title("👤 Patient Monitoring")
+
+    if st.session_state.history:
+
+        df = pd.DataFrame(
+            st.session_state.history,
+            columns=["Label", "Confidence"]
+        )
+
+        st.dataframe(df, use_container_width=True)
+
+        st.line_chart(df["Confidence"])
+
+        avg = df["Confidence"].mean()
+
+        st.metric("Average Stress", f"{round(avg,2)}%")
+
+        if avg > 75:
+            st.error("Chronic high stress detected")
+        elif avg > 50:
+            st.warning("Moderate stress pattern")
         else:
-            st.warning(label)
+            st.success("Stable condition")
 
-        st.progress(int(confidence))
-        st.write(f"Confidence: {confidence}%")
-        st.write(f"Risk Level: {risk}")
+    else:
+        st.info("No patient data")
 
-st.markdown("---")
+# ================= REPORTS =================
+elif page == "Reports":
 
-if btn and text.strip():
-    st.markdown("### Metrics")
+    st.title("📄 Clinical Reports")
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Stress", label)
-    c2.metric("Confidence", f"{confidence}%")
-    c3.metric("Risk", risk)
+    if st.session_state.history:
 
-st.markdown("---")
+        df = pd.DataFrame(
+            st.session_state.history,
+            columns=["Label", "Confidence"]
+        )
 
-if st.session_state.history:
-    st.markdown("### Stress Trend")
+        st.download_button(
+            "Download Report",
+            df.to_csv(index=False),
+            "stress_report.csv"
+        )
 
-    df = pd.DataFrame(st.session_state.history, columns=["Label", "Confidence"])
-    st.line_chart(df["Confidence"])
+    else:
+        st.info("No data")
 
-    st.markdown("### Recent History")
-    for i, (l, c) in enumerate(st.session_state.history[-5:]):
-        st.write(f"{i+1}. {l} - {c}%")
+# ================= SYSTEM =================
+elif page == "System":
+
+    st.title("⚙️ System Overview")
+
+    st.markdown("""
+    - Hybrid AI System (ML + BERT)
+    - Clinical Decision Support
+    - Real-time Monitoring
+    - Deployed on Streamlit Cloud
+    """)
+
+    st.info("This system assists in early stress detection.")
