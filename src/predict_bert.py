@@ -1,34 +1,54 @@
-import torch
-from transformers import BertTokenizer, BertForSequenceClassification
+import joblib
 import os
 from functools import lru_cache
+import numpy as np
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODEL_DIR = os.path.join(BASE_DIR, "models", "bert_model")
+MODEL_PATH = os.path.join(BASE_DIR, "models", "model.pkl")
 
 @lru_cache(maxsize=1)
 def load_model():
-    tokenizer = BertTokenizer.from_pretrained(MODEL_DIR)
-    model = BertForSequenceClassification.from_pretrained(MODEL_DIR)
-    model.eval()
-    return tokenizer, model
+    return joblib.load(MODEL_PATH)
 
-tokenizer, model = load_model()
+model = load_model()
+
+def _confidence(probs):
+    probs = np.array(probs)
+    return float(np.max(probs) * 100)
+
+def _risk_level(conf):
+    if conf < 50:
+        return "Low"
+    elif conf < 75:
+        return "Moderate"
+    else:
+        return "High"
 
 def predict_stress(text):
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+    text = str(text).strip()
 
-    with torch.no_grad():
-        outputs = model(**inputs)
-        probs = torch.nn.functional.softmax(outputs.logits, dim=1)
-        confidence, prediction = torch.max(probs, dim=1)
+    if not text:
+        return "Invalid", 0.0, "Low"
 
-    confidence = float(confidence.item() * 100)
-    prediction = int(prediction.item())
+    try:
+        pred = model.predict([text])[0]
 
-    if prediction == 0:
-        label = "Low Stress"
-    else:
-        label = "High Stress"
+        if hasattr(model, "predict_proba"):
+            probs = model.predict_proba([text])[0]
+            conf = _confidence(probs)
+        else:
+            conf = 70.0
 
-    return label, round(confidence, 2)
+        if pred == 0:
+            label = "Low Stress"
+        elif pred == 1:
+            label = "High Stress"
+        else:
+            label = "Medium Stress"
+
+        risk = _risk_level(conf)
+
+        return label, round(conf, 2), risk
+
+    except Exception:
+        return "Error", 0.0, "Low"
