@@ -1,8 +1,14 @@
 import streamlit as st
 import pandas as pd
 import time
+import sys
+import os
 
-# ✅ CORRECT IMPORTS (PACKAGE-BASED)
+# ---------- PATH FIX ----------
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, ROOT_DIR)
+
+# ---------- IMPORTS ----------
 from src.hybrid_predict import hybrid_predict
 from src.intelligence_engine import (
     generate_alerts,
@@ -17,13 +23,11 @@ from components.result_panel import render_result
 from components.kpi_cards import render_kpis
 from components.charts import render_charts
 
-
 # ---------- CONFIG ----------
 st.set_page_config(
     page_title="AI Mental Health Platform",
     layout="wide"
 )
-
 
 # ---------- SESSION ----------
 if "history" not in st.session_state:
@@ -35,7 +39,6 @@ if "result" not in st.session_state:
 if "latency" not in st.session_state:
     st.session_state.latency = 0
 
-
 # ---------- HEADER ----------
 st.markdown("""
 <div style="padding:18px;border-radius:12px;
@@ -44,7 +47,6 @@ background:linear-gradient(90deg,#00c6ff,#0072ff);color:white">
 <p>Decision Support • Real-time Monitoring • Predictive Intelligence</p>
 </div>
 """, unsafe_allow_html=True)
-
 
 # ---------- SIDEBAR ----------
 with st.sidebar:
@@ -69,13 +71,12 @@ with st.sidebar:
 
     st.caption(f"Latency: {st.session_state.latency} ms")
 
-
 # ================= DASHBOARD =================
 if page == "Dashboard":
 
     st.markdown("## 🏥 Clinical Decision Dashboard")
 
-    # ---------- TOP KPI ----------
+    # ---------- TOP KPIs ----------
     if st.session_state.history:
         df = pd.DataFrame(st.session_state.history, columns=["Label", "Confidence"])
 
@@ -97,6 +98,7 @@ if page == "Dashboard":
         if analyze and text.strip():
 
             start = time.time()
+
             result = hybrid_predict(text, model_mode)
 
             st.session_state.latency = int((time.time() - start) * 1000)
@@ -110,7 +112,7 @@ if page == "Dashboard":
 
     st.markdown("---")
 
-    # ---------- KPI ----------
+    # ---------- KPI CARDS ----------
     if st.session_state.result:
         render_kpis(st.session_state.result, st.session_state.history)
 
@@ -130,29 +132,42 @@ if page == "Dashboard":
 
         st.markdown("## 🧠 Clinical Intelligence")
 
-        c1, c2 = st.columns(2)
+        col1, col2 = st.columns(2)
 
-        with c1:
+        # ---------- ALERTS ----------
+        with col1:
             st.markdown("### 🚨 Alerts")
-            for a in alerts or ["No critical alerts"]:
-                st.error(a) if alerts else st.success(a)
 
-        with c2:
+            if alerts:
+                for a in alerts:
+                    st.error(a)
+            else:
+                st.success("No critical alerts")
+
+        # ---------- INSIGHTS ----------
+        with col2:
             st.markdown("### 🔍 Insights")
-            for i in insights or ["Stable behavior"]:
-                st.info(i)
+
+            if insights:
+                for i in insights:
+                    st.info(i)
+            else:
+                st.info("Stable behavior")
 
         st.markdown("---")
 
+        # ---------- METRICS ----------
         m1, m2 = st.columns(2)
-        m1.metric("Risk Score", intelligence["risk_score"])
-        m2.metric("Volatility", intelligence["volatility"])
+        m1.metric("Risk Score", intelligence.get("risk_score", 0))
+        m2.metric("Volatility", intelligence.get("volatility", 0))
 
         st.markdown("---")
 
+        # ---------- RECOMMENDATION ----------
         st.markdown("### 💡 Recommendation")
         st.success(recommendation)
 
+        # ---------- SUMMARY ----------
         st.markdown("### 📄 Summary")
         st.code(summary)
 
@@ -165,12 +180,12 @@ if page == "Dashboard":
         df = pd.DataFrame(st.session_state.history, columns=["Label", "Confidence"])
         st.line_chart(df["Confidence"])
 
-
 # ================= ANALYTICS =================
 elif page == "Analytics":
-    st.markdown("## 📊 Advanced Analytics")
-    render_charts(st.session_state.history)
 
+    st.markdown("## 📊 Advanced Analytics")
+
+    render_charts(st.session_state.history)
 
 # ================= MONITOR =================
 elif page == "Monitor":
@@ -178,6 +193,7 @@ elif page == "Monitor":
     st.markdown("## 👤 Patient Monitoring")
 
     if st.session_state.history:
+
         df = pd.DataFrame(st.session_state.history, columns=["Label", "Confidence"])
 
         c1, c2 = st.columns([2, 1])
@@ -197,9 +213,9 @@ elif page == "Monitor":
                 st.warning("Moderate stress")
             else:
                 st.success("Stable")
+
     else:
         st.info("No monitoring data available")
-
 
 # ================= REPORTS =================
 elif page == "Reports":
@@ -207,15 +223,16 @@ elif page == "Reports":
     st.markdown("## 📄 Clinical Reports")
 
     if st.session_state.history:
+
         df = pd.DataFrame(st.session_state.history, columns=["Label", "Confidence"])
 
         st.download_button("⬇ CSV", df.to_csv(index=False), "report.csv")
         st.download_button("⬇ JSON", df.to_json(), "report.json")
 
         st.dataframe(df)
+
     else:
         st.info("No data available")
-
 
 # ================= SYSTEM =================
 elif page == "System":
@@ -223,10 +240,20 @@ elif page == "System":
     st.markdown("## ⚙️ System Intelligence")
 
     st.markdown("""
-- Hybrid AI (ML + BERT)  
-- Intelligence Engine  
-- Decision Support Layer  
-- Real-time Monitoring  
+### 🧠 Architecture
+- Hybrid AI (ML + BERT)
+- Intelligence Engine
+- Decision Support Layer
+
+### ⚡ Capabilities
+- Real-time prediction
+- Behavioral analysis
+- Risk scoring
+- Alert system
+
+### 🚀 Deployment
+- Modular architecture
+- Scalable system
 """)
 
     st.success("System Fully Operational")
