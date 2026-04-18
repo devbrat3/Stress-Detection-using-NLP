@@ -10,18 +10,20 @@ sys.path.insert(0, ROOT_DIR)
 
 # ---------- IMPORTS ----------
 from src.hybrid_predict import hybrid_predict
-from src.intelligence_engine import (
+
+from components.input_panel import render_input
+from components.result_panel import render_result
+from components.kpi_cards import render_kpis
+from components.charts import render_charts
+
+# ✅ FIXED IMPORT (IMPORTANT)
+from components.intelligence_engine import (
     generate_alerts,
     generate_insights,
     generate_intelligence,
     generate_recommendation,
     generate_summary
 )
-
-from components.input_panel import render_input
-from components.result_panel import render_result
-from components.kpi_cards import render_kpis
-from components.charts import render_charts
 
 # ---------- CONFIG ----------
 st.set_page_config(
@@ -184,7 +186,6 @@ if page == "Dashboard":
 elif page == "Analytics":
 
     st.markdown("## 📊 Advanced Analytics")
-
     render_charts(st.session_state.history)
 
 # ================= MONITOR =================
