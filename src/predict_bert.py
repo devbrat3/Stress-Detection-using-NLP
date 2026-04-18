@@ -5,7 +5,7 @@ from functools import lru_cache
 import numpy as np
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LOCAL_MODEL_DIR = os.path.abspath(os.path.join(BASE_DIR, "models", "bert_model")).replace("\\", "/")
+MODEL_DIR = os.path.join(BASE_DIR, "models", "bert_model")
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -13,15 +13,18 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @lru_cache(maxsize=1)
 def load_model():
     try:
-        if os.path.exists(LOCAL_MODEL_DIR):
+        if os.path.exists(MODEL_DIR):
             tokenizer = AutoTokenizer.from_pretrained(
-                LOCAL_MODEL_DIR, use_fast=True, local_files_only=True
+                MODEL_DIR,
+                use_fast=True,
+                local_files_only=True
             )
             model = BertForSequenceClassification.from_pretrained(
-                LOCAL_MODEL_DIR, local_files_only=True
+                MODEL_DIR,
+                local_files_only=True
             )
         else:
-            tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=True)
+            tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
             model = BertForSequenceClassification.from_pretrained("bert-base-uncased")
 
         model.to(DEVICE)
@@ -36,50 +39,49 @@ def load_model():
         raise RuntimeError(f"BERT load failed: {e}")
 
 
-def _confidence_calibrated(probs):
+def _confidence(probs):
     probs = np.array(probs)
     top2 = np.sort(probs)[-2:]
     margin = top2[-1] - top2[-2] if len(top2) > 1 else top2[-1]
-    conf = (top2[-1] * 0.7 + margin * 0.3) * 100
-    return float(np.clip(conf, 0, 100))
+    return float(np.clip((top2[-1] * 0.7 + margin * 0.3) * 100, 0, 100))
 
 
 def _risk(conf):
-    if conf > 85:
+    if conf >= 85:
         return "Critical"
-    elif conf > 70:
+    elif conf >= 70:
         return "High"
-    elif conf > 50:
+    elif conf >= 50:
         return "Moderate"
-    else:
-        return "Low"
+    return "Low"
 
 
 def _severity(label, conf):
-    if label == "High Stress" and conf > 80:
+    if label == "High Stress" and conf >= 80:
         return "Severe"
-    elif conf > 60:
+    elif conf >= 65:
         return "Elevated"
-    else:
-        return "Normal"
+    return "Normal"
 
 
 def _advice(risk):
-    if risk == "Critical":
-        return "Immediate professional help recommended"
-    elif risk == "High":
-        return "Take rest and monitor closely"
-    elif risk == "Moderate":
-        return "Practice relaxation techniques"
-    else:
-        return "Maintain healthy routine"
+    return {
+        "Critical": "Immediate professional consultation required",
+        "High": "Reduce workload and monitor closely",
+        "Moderate": "Practice stress management techniques",
+        "Low": "Maintain a healthy routine"
+    }.get(risk, "Maintain balance")
+
+
+def _explanation(label):
+    return f"{label} inferred using contextual semantic understanding via transformer model"
 
 
 def predict_stress(text):
     text = str(text).strip()
 
     if not text or len(text.split()) < 2:
-        return "Insufficient Input", 0.0, "Low", "Normal", "No advice"
+        return "Invalid", 0.0, "Low", "Normal", "Provide meaningful input"
 
     try:
         tokenizer, model = load_model()
@@ -104,16 +106,16 @@ def predict_stress(text):
         logits = outputs.logits
         probs = torch.nn.functional.softmax(logits, dim=1).cpu().numpy()[0]
 
-        prediction = int(np.argmax(probs))
-        confidence = _confidence_calibrated(probs)
+        pred = int(np.argmax(probs))
+        conf = _confidence(probs)
 
-        label = "Low Stress" if prediction == 0 else "High Stress"
+        label = "Low Stress" if pred == 0 else "High Stress"
 
-        risk = _risk(confidence)
-        severity = _severity(label, confidence)
+        risk = _risk(conf)
+        severity = _severity(label, conf)
         advice = _advice(risk)
 
-        return label, round(confidence, 2), risk, severity, advice
+        return label, round(conf, 2), risk, severity, advice
 
     except Exception as e:
-        return f"Prediction Error: {str(e)}", 0.0, "Low", "Normal", "Error"
+        return "Error", 0.0, "Low", "Normal", str(e)
